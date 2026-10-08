@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+cache_kline
+test_quant.db
+*.zip
+logs/*.log

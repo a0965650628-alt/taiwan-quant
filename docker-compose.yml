@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  taiwan-quant:
+    build: .
+    container_name: taiwan_quant_system
+    restart: always
+    environment:
+      - TZ=Asia/Taipei
+      - LINE_CHANNEL_ACCESS_TOKEN=2Jh9ZcYXB8kAaQzFjcNCAImnvJs707XzXuGQOhaKEUK7QhihuqqjJwShoCv6RoYQ9PbBlAIxhQCVMSWq5o/sS4CPOLkp7x3lGuWYj63HmH4PWLhMSjUo+thw4NT6kJjBJ4qCtVTqguKl5tQaMNDfmQdB04t89/1O/w1cDnyilFU=
+      - LINE_USER_ID=U24a87027f5463870df6f01e223e3ac97
+    volumes:
+      - ./logs:/app/logs
+      - ./quant_history.db:/app/quant_history.db
