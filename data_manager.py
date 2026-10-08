@@ -82,19 +82,24 @@ class DataManager:
         return list(cfg.DEFAULT_WATCHLIST)
 
     def _format_ticker(self, stock_id: str) -> str:
-        """判斷上市(.TW)或上櫃(.TWO)格式"""
+        """判斷上市(.TW)或上櫃(.TWO)格式，支援自動容錯轉譯"""
         try:
             info = twstock.codes.get(stock_id)
             if info and "上櫃" in getattr(info, "market", ""):
                 return f"{stock_id}.TWO"
+            if info and "上市" in getattr(info, "market", ""):
+                return f"{stock_id}.TW"
         except Exception:
             pass
+        # 7 開頭或 6 開頭在台股常為上櫃/戰略新板標的 (如 7856 台特化)
+        if stock_id.startswith(("7", "6")):
+            return f"{stock_id}.TWO"
         return f"{stock_id}.TW"
 
     def refresh_daily_indicators(self, stock_ids: List[str]) -> None:
         """
         每日盤前或開盤計算日K指標 (MA20, MA60, 20日高, 14日RSI, 20日均量)
-        並寫入本地快取，避免重複對 yfinance 發送頻繁請求
+        並寫入本地快取，支援新上市股自適應均線與雙市場尾綴備援
         """
         today_str = datetime.now().strftime("%Y-%m-%d")
         with self._lock:
@@ -120,16 +125,30 @@ class DataManager:
                 ticker = yf.Ticker(ticker_sym)
                 df = ticker.history(period="6mo", timeout=cfg.HTTP_TIMEOUT)
                 
-                if df.empty or len(df) < 60:
-                    logger.warning(f"標的 [{sid}] 日K資料不足 60 天，無法計算完整指標")
+                # 雙向容錯：若預設後綴無資料，自動切換上市/櫃後綴嘗試
+                if df.empty:
+                    alt_sym = f"{sid}.TW" if ticker_sym.endswith(".TWO") else f"{sid}.TWO"
+                    alt_df = yf.Ticker(alt_sym).history(period="6mo", timeout=cfg.HTTP_TIMEOUT)
+                    if not alt_df.empty:
+                        ticker_sym = alt_sym
+                        df = alt_df
+
+                if df.empty or len(df) < 20:
+                    logger.warning(f"標的 [{sid}] 日K資料不足 20 天，無法計算基準指標")
                     continue
                 
                 close = df['Close']
                 high = df['High']
                 volume = df['Volume']
                 
+                # 自適應均線：若上市未滿 60 天但已滿 20 天 (新掛牌強勢股)，動態支援
                 ma20 = close.rolling(window=20).mean().iloc[-1]
-                ma60 = close.rolling(window=60).mean().iloc[-1]
+                if len(df) >= 60:
+                    ma60 = close.rolling(window=60).mean().iloc[-1]
+                else:
+                    ma60 = ma20  # 新股以月線替代季線作為保護
+                    logger.info(f"標的 [{sid}] 為新上市/櫃股 (掛牌 {len(df)} 天)，啟動自適應 MA20 監控")
+                
                 high_20 = high.iloc[-20:].max()
                 
                 # yfinance volume 單位為股 (Shares)，轉換為張 (Lots) 以匹配盤中報價

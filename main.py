@@ -131,14 +131,16 @@ def run_post_market_settlement(alert_mgr: AlertManager, data_mgr: DataManager):
 
     logger.info(f"今日共觸發 {len(alerts)} 筆警報，開始比對最新收盤績效與法人籌碼...")
 
-    pnl_list = []
-    wins = 0
+    buy_pnl_list = []
+    buy_wins = 0
+    risk_count = 0
     detail_lines = []
 
     zh_type_map = {
-        "RISK_STOP_LOSS": "🚨 停損",
+        "RISK_STOP_LOSS": "🚨 停損風控",
         "STRATEGY_BREAKOUT": "🚀 創高突破",
-        "STRATEGY_MA20_REBOUND": "📈 月線起漲"
+        "STRATEGY_MA20_REBOUND": "📈 月線起漲",
+        "STRATEGY_INST_ACCUMULATION": "🏛️ 法人暗中布局"
     }
 
     import twstock
@@ -160,43 +162,63 @@ def run_post_market_settlement(alert_mgr: AlertManager, data_mgr: DataManager):
             close_price = rt.get("current_price", signal_price) if rt else signal_price
 
         pnl_pct = ((close_price - signal_price) / signal_price) * 100.0 if signal_price > 0 else 0.0
-        pnl_list.append(pnl_pct)
-        if pnl_pct >= 0:
-            wins += 1
-
         sign = "+" if pnl_pct >= 0 else ""
+        
         flow = stock_flows.get(sid)
         flow_str = ""
         if flow:
             flow_str = f"\n   籌碼: 外資 {flow['foreign_lots']:+.0f}張 | 投信 {flow['trust_lots']:+.0f}張"
 
-        detail_lines.append(
-            f"{idx}. {sid}{sname} [{zh_type}]\n"
-            f"   進場: {signal_price:.2f} ➜ 結算: {close_price:.2f} ({sign}{pnl_pct:.2f}%){flow_str}"
-        )
+        if atype == "RISK_STOP_LOSS":
+            risk_count += 1
+            if pnl_pct < 0:
+                status_desc = f"(避險少賠 {abs(pnl_pct):.2f}% 🛡️ 風控守紀律)"
+            else:
+                status_desc = f"(洗盤回升 +{pnl_pct:.2f}% ⚠️ 防守位震盪)"
+            detail_lines.append(
+                f"{idx}. {sid}{sname} [{zh_type}]\n"
+                f"   觸發防守: {signal_price:.2f} ➜ 收盤: {close_price:.2f} {status_desc}{flow_str}"
+            )
+        else:
+            buy_pnl_list.append(pnl_pct)
+            if pnl_pct >= 0:
+                buy_wins += 1
+            status_desc = "🎯 獲利達標" if pnl_pct > 0 else "持平整理"
+            detail_lines.append(
+                f"{idx}. {sid}{sname} [{zh_type}]\n"
+                f"   建議進場: {signal_price:.2f} ➜ 結算: {close_price:.2f} ({sign}{pnl_pct:.2f}% {status_desc}){flow_str}"
+            )
 
     # 綜合績效統計
-    total_trades = len(pnl_list)
-    win_rate = (wins / total_trades * 100.0) if total_trades > 0 else 0.0
-    avg_pnl = sum(pnl_list) / total_trades if total_trades > 0 else 0.0
-    max_pnl = max(pnl_list) if pnl_list else 0.0
-    min_pnl = min(pnl_list) if pnl_list else 0.0
+    total_alerts = len(alerts)
+    perf_lines = [
+        "🏆【今日策略運作績效】",
+        f"• 觸發標的總數：{total_alerts} 檔"
+    ]
+    if buy_pnl_list:
+        total_buys = len(buy_pnl_list)
+        win_rate = (buy_wins / total_buys * 100.0)
+        avg_pnl = sum(buy_pnl_list) / total_buys
+        max_pnl = max(buy_pnl_list)
+        min_pnl = min(buy_pnl_list)
+        perf_lines.extend([
+            f"• 🎯 買進策略勝率：{win_rate:.1f}% ({buy_wins}/{total_buys})",
+            f"• 📈 買進平均損益：{avg_pnl:+.2f}%",
+            f"• 🥇 最高買進表現：{max_pnl:+.2f}%",
+            f"• 📉 最低買進表現：{min_pnl:+.2f}%"
+        ])
+    if risk_count > 0:
+        perf_lines.append(f"• 🚨 觸發停損警戒：{risk_count} 檔 (嚴控風險，少虧為盈)")
+    
+    perf_lines.append("\n────────────────────\n")
+    perf_lines.append("📋【各檔標的結算與籌碼明細】")
 
     # 手機友善排版 (法人數據與績效前置、卡片分段)
     report_lines = [
         f"\n📊【{today} 14:30 盤後策略與法人結算日報】\n"
     ]
     report_lines.extend(inst_section_lines)
-    report_lines.extend([
-        "🏆【今日策略績效】",
-        f"• 觸發標的：{total_trades} 檔",
-        f"• 🎯 策略勝率：{win_rate:.1f}% ({wins}/{total_trades})",
-        f"• 📈 平均損益：{avg_pnl:+.2f}%",
-        f"• 🥇 最高表現：{max_pnl:+.2f}%",
-        f"• 📉 最低表現：{min_pnl:+.2f}%\n",
-        "────────────────────\n",
-        "📋【各檔標的結算與籌碼明細】"
-    ])
+    report_lines.extend(perf_lines)
     report_lines.extend(detail_lines)
 
     final_report = "\n".join(report_lines)

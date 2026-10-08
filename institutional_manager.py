@@ -19,48 +19,58 @@ class InstitutionalManager:
     TIMEOUT = 12
 
     @classmethod
-    def fetch_market_institutional_summary(cls) -> Optional[Dict[str, Any]]:
+    def fetch_market_institutional_summary(cls, max_retries: int = 3, retry_delay: int = 10) -> Optional[Dict[str, Any]]:
         """
         獲取今日大盤三大法人交易金額 (單位：億元)
+        支援證交所 14:30 延遲公告自動輪詢重試 (預設重試 3 次)
         回傳: 外資、投信、自營商及合計買賣超金額
         """
-        try:
-            res = requests.get(cls.TWSE_MARKET_URL, headers=cls.HEADERS, timeout=cls.TIMEOUT)
-            res.raise_for_status()
-            data = res.json()
-            
-            if data.get("stat") != "OK" and "data" not in data:
-                logger.warning(f"TWSE 三大法人金額尚未公佈或無資料: {data.get('stat')}")
-                return None
+        import time
+        for attempt in range(1, max_retries + 1):
+            try:
+                res = requests.get(cls.TWSE_MARKET_URL, headers=cls.HEADERS, timeout=cls.TIMEOUT)
+                res.raise_for_status()
+                data = res.json()
+                
+                if data.get("stat") != "OK" or "data" not in data:
+                    if attempt < max_retries:
+                        logger.info(f"TWSE 三大法人金額尚未公佈 (第 {attempt} 次檢測)，等待 {retry_delay} 秒後重試...")
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        logger.warning(f"TWSE 三大法人金額目前尚未公佈或無資料: {data.get('stat')}")
+                        return None
 
-            market_summary = {}
-            for row in data.get("data", []):
-                name = row[0].replace(" ", "").strip()
-                diff_str = row[3].replace(",", "").strip()
-                try:
-                    diff_val = int(diff_str)
-                    market_summary[name] = diff_val
-                except ValueError:
-                    continue
+                market_summary = {}
+                for row in data.get("data", []):
+                    name = row[0].replace(" ", "").strip()
+                    diff_str = row[3].replace(",", "").strip()
+                    try:
+                        diff_val = int(diff_str)
+                        market_summary[name] = diff_val
+                    except ValueError:
+                        continue
 
-            foreign = market_summary.get("外資及陸資(不含外資自營商)", 0) / 1e8
-            trust = market_summary.get("投信", 0) / 1e8
-            dealer_self = market_summary.get("自營商(自行買賣)", 0) / 1e8
-            dealer_hedge = market_summary.get("自營商(避險)", 0) / 1e8
-            dealer = dealer_self + dealer_hedge
-            total = market_summary.get("合計", 0) / 1e8
+                foreign = market_summary.get("外資及陸資(不含外資自營商)", 0) / 1e8
+                trust = market_summary.get("投信", 0) / 1e8
+                dealer_self = market_summary.get("自營商(自行買賣)", 0) / 1e8
+                dealer_hedge = market_summary.get("自營商(避險)", 0) / 1e8
+                dealer = dealer_self + dealer_hedge
+                total = market_summary.get("合計", 0) / 1e8
 
-            return {
-                "title": data.get("title", "三大法人買賣金額統計"),
-                "date": data.get("date", ""),
-                "foreign_billion": foreign,
-                "trust_billion": trust,
-                "dealer_billion": dealer,
-                "total_billion": total
-            }
-        except Exception as e:
-            logger.error(f"獲取大盤三大法人金額失敗: {e}")
-            return None
+                return {
+                    "title": data.get("title", "三大法人買賣金額統計"),
+                    "date": data.get("date", ""),
+                    "foreign_billion": foreign,
+                    "trust_billion": trust,
+                    "dealer_billion": dealer,
+                    "total_billion": total
+                }
+            except Exception as e:
+                logger.error(f"獲取大盤三大法人金額嘗試 {attempt}/{max_retries} 失敗: {e}")
+                if attempt < max_retries:
+                    time.sleep(retry_delay)
+        return None
 
     @classmethod
     def fetch_stocks_institutional_flow(cls, target_sids: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
