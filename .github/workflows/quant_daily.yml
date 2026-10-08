@@ -1,0 +1,62 @@
+name: Taiwan Quant Automated Scheduler
+
+on:
+  schedule:
+    # 晨報：週一至週五 08:50 (UTC 00:50)
+    - cron: '50 0 * * 1-5'
+    # 盤中監控：週一至週五 09:00 (UTC 01:00)
+    - cron: '0 1 * * 1-5'
+    # 盤後結算：週一至週五 14:30 (UTC 06:30)
+    - cron: '30 6 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: '選擇要執行的任務 (morning: 晨報, session: 盤中即時監控, settle: 盤後結算, once: 單次掃描測試)'
+        required: true
+        default: 'settle'
+        type: choice
+        options:
+          - morning
+          - session
+          - settle
+          - once
+
+jobs:
+  run-quant-task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 簽出專案代碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python 3.12 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 安裝必要依賴套件
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 執行台股量化任務並派發 LINE 推播
+        env:
+          TZ: Asia/Taipei
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ACTION="${{ inputs.action }}"
+          else
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -eq "0" ]; then
+              ACTION="morning"
+            elif [ "$HOUR" -ge "1" ] && [ "$HOUR" -lt "6" ]; then
+              ACTION="session"
+            else
+              ACTION="settle"
+            fi
+          fi
+
+          echo "🚀 正在執行任務指令: python main.py --$ACTION"
+          python main.py --$ACTION
