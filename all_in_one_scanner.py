@@ -94,11 +94,9 @@ class VolumeEstimator:
     def get_market_elapsed_minutes(cls, now_dt: datetime) -> int:
         market_open = now_dt.replace(hour=9, minute=0, second=0, microsecond=0)
         market_close = now_dt.replace(hour=13, minute=30, second=0, microsecond=0)
-        if now_dt < market_open:
-            return 0
-        if now_dt >= market_close:
-            return 270
-        return int((now_dt - market_open).total_seconds() // 60)
+        if market_open <= now_dt < market_close:
+            return int((now_dt - market_open).total_seconds() // 60)
+        return 270
 
     @classmethod
     def get_cumulative_ratio(cls, elapsed_mins: int) -> float:
@@ -467,7 +465,7 @@ class StrategyEngine:
                 }
             }
 
-        # 策略三：🏛️ 法人暗中布局起漲策略
+        # 策略三：💼 法人暗中布局起漲策略
         if inst.get("is_accumulating", False) and -0.5 <= bias_ma20 <= 3.0 and vol_multiple >= 1.2:
             stop_loss_pct = getattr(cfg, "STOP_LOSS_PCT", 3.5)
             tp1_pct = getattr(cfg, "TP1_PCT", 6.0)
@@ -486,7 +484,7 @@ class StrategyEngine:
             t_3d = inst.get("trust_3d", 0.0)
             return {
                 "stock_id": stock_id, "stock_name": stock_name, "type": "STRATEGY_INST_ACCUMULATION",
-                "title": f"🏛️ 法人暗中布局起漲訊號 ({inst_tag})",
+                "title": f"💼 法人暗中布局起漲訊號 ({inst_tag})",
                 "desc": f"三大法人近3日默默布局 (外資 {f_3d:+.0f}張 / 投信 {t_3d:+.0f}張)！股價自月線帶量發動起漲！",
                 "price": price, "bias": round(bias_ma20, 2), "rsi": round(rsi_14, 2),
                 "vol_multiple": round(vol_multiple, 2), "est_vol": int(est_vol),
@@ -567,7 +565,7 @@ class AlertManager:
                 tot_3d = inst.get("total_3d", 0.0)
                 tag = inst.get("tag", "")
                 inst_block = (
-                    f"🏛️【法人籌碼布局監控】\n"
+                    f"💼【法人籌碼布局監控】\n"
                     f"• 籌碼評估：{tag}\n"
                     f"• 投信動向：近3日 {t_3d:+.0f} 張\n"
                     f"• 外資動向：近3日 {f_3d:+.0f} 張\n"
@@ -740,7 +738,7 @@ def run_post_market_settlement(alert_mgr: AlertManager, data_mgr: DataManager):
     inst_section_lines = []
     if inst_market:
         inst_section_lines = [
-            "🏛️【今日三大法人交易金額】",
+            "💼【今日三大法人交易金額】",
             f"• 🌐 外資及陸資：{inst_market['foreign_billion']:+.2f} 億元",
             f"• 💼 投信基金：{inst_market['trust_billion']:+.2f} 億元",
             f"• 🏢 自營商：{inst_market['dealer_billion']:+.2f} 億元",

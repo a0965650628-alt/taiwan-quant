@@ -33,13 +33,14 @@ class VolumeEstimator:
         market_open = now_dt.replace(hour=9, minute=0, second=0, microsecond=0)
         market_close = now_dt.replace(hour=13, minute=30, second=0, microsecond=0)
 
-        if now_dt < market_open:
-            return 0
-        if now_dt >= market_close:
-            return 270
-        
-        diff = now_dt - market_open
-        return int(diff.total_seconds() // 60)
+        # 盤中正常交易時段 (09:00 ~ 13:30)
+        if market_open <= now_dt < market_close:
+            diff = now_dt - market_open
+            return int(diff.total_seconds() // 60)
+
+        # 盤後或未開盤非交易時段 (13:30 ~ 24:00 及 00:00 ~ 09:00)：
+        # 市場非撮合狀態，當前行情為收盤確定量，視為全日 270 分鐘 (100% 累積)
+        return 270
 
     @classmethod
     def get_cumulative_ratio(cls, elapsed_mins: int) -> float:

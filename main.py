@@ -95,7 +95,7 @@ def run_post_market_settlement(alert_mgr: AlertManager, data_mgr: DataManager):
     inst_section_lines = []
     if inst_market:
         inst_section_lines = [
-            "🏛️【今日三大法人交易金額】",
+            "💼【今日三大法人交易金額】",
             f"• 🌐 外資及陸資：{inst_market['foreign_billion']:+.2f} 億元",
             f"• 💼 投信基金：{inst_market['trust_billion']:+.2f} 億元",
             f"• 🏢 自營商：{inst_market['dealer_billion']:+.2f} 億元",
@@ -140,7 +140,7 @@ def run_post_market_settlement(alert_mgr: AlertManager, data_mgr: DataManager):
         "RISK_STOP_LOSS": "🚨 停損風控",
         "STRATEGY_BREAKOUT": "🚀 創高突破",
         "STRATEGY_MA20_REBOUND": "📈 月線起漲",
-        "STRATEGY_INST_ACCUMULATION": "🏛️ 法人暗中布局"
+        "STRATEGY_INST_ACCUMULATION": "💼 法人暗中布局"
     }
 
     import twstock

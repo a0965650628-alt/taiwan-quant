@@ -4,6 +4,7 @@ strategy_engine.py
 """
 import logging
 import twstock
+from datetime import datetime
 from typing import Dict, Any, Optional
 from config import cfg
 from volume_estimator import VolumeEstimator
@@ -12,12 +13,13 @@ logger = logging.getLogger("StrategyEngine")
 
 class StrategyEngine:
     @staticmethod
-    def evaluate(stock_id: str, realtime: Dict[str, Any], daily_ind: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def evaluate(stock_id: str, realtime: Dict[str, Any], daily_ind: Dict[str, Any], now_dt: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
         """
         核心訊號評估邏輯
         :param stock_id: 股票代號 (例: "2330")
         :param realtime: 即時行情快照 (current_price, accumulate_vol 等)
         :param daily_ind: 日K技術指標 (ma20, ma60, high_20, ma20_vol, rsi_14, last_close)
+        :param now_dt: 評估基準時間 (預設 None 使用當前時間或 realtime.get('eval_time'))
         :return: 觸發的訊號資訊字典，若無觸發則返回 None
         """
         price = realtime.get("current_price")
@@ -44,7 +46,8 @@ class StrategyEngine:
             return None
 
         # 1. 動態推算全日成交量與放量倍數 (U型微笑曲線)
-        est_vol, ratio = VolumeEstimator.estimate_full_day_volume(current_vol)
+        eval_dt = now_dt or realtime.get("eval_time")
+        est_vol, ratio = VolumeEstimator.estimate_full_day_volume(current_vol, now_dt=eval_dt)
         vol_multiple = (est_vol / ma20_vol) if ma20_vol > 0 else 1.0
 
         # 2. 計算 20MA 正負乖離率 (%)
@@ -193,7 +196,7 @@ class StrategyEngine:
                 }
             }
 
-        # --- 【策略三】：🏛️ 法人暗中布局起漲策略 ---
+        # --- 【策略三】：💼 法人暗中布局起漲策略 ---
         # 當法人近 3 日積極默默買超，股價在月線附近安全打底 (-0.5% ~ +3.0%)，且盤中放量 >= 1.2x
         if inst.get("is_accumulating", False) and -0.5 <= bias_ma20 <= 3.0 and vol_multiple >= 1.2:
             stop_loss_pct = getattr(cfg, "STOP_LOSS_PCT", 3.5)
@@ -215,7 +218,7 @@ class StrategyEngine:
                 "stock_id": stock_id,
                 "stock_name": stock_name,
                 "type": "STRATEGY_INST_ACCUMULATION",
-                "title": f"🏛️ 法人暗中布局起漲訊號 ({inst_tag})",
+                "title": f"💼 法人暗中布局起漲訊號 ({inst_tag})",
                 "desc": f"三大法人近3日默默布局 (外資 {f_3d:+.0f}張 / 投信 {t_3d:+.0f}張)！股價自月線帶量發動起漲！",
                 "price": price,
                 "bias": round(bias_ma20, 2),

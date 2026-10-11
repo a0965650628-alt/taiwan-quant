@@ -87,7 +87,7 @@ class AlertManager:
                 tot_3d = inst.get("total_3d", 0.0)
                 tag = inst.get("tag", "")
                 inst_block = (
-                    f"🏛️【法人籌碼布局監控】\n"
+                    f"💼【法人籌碼布局監控】\n"
                     f"• 籌碼評估：{tag}\n"
                     f"• 投信動向：近3日 {t_3d:+.0f} 張\n"
                     f"• 外資動向：近3日 {f_3d:+.0f} 張\n"

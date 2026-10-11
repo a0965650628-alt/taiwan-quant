@@ -215,7 +215,7 @@ class InstitutionalManager:
     def fetch_recent_accumulation(cls, target_sids: Optional[List[str]] = None, days: int = 3) -> Dict[str, Dict[str, Any]]:
         """
         計算近 N 日三大法人累積籌碼與布局等級
-        回傳: { "2330": { "foreign_3d": 6934.9, "trust_3d": 816.5, "total_3d": 9086.1, "is_accumulating": True, "tag": "🏛️ 土洋同步認養布局" } }
+        回傳: { "2330": { "foreign_3d": 6934.9, "trust_3d": 816.5, "total_3d": 9086.1, "is_accumulating": True, "tag": "💼 土洋同步認養布局" } }
         """
         candidate_dates = cls.get_recent_trading_dates(days)
         valid_flows = []
@@ -247,15 +247,15 @@ class InstitutionalManager:
 
             # 判斷法人布局型態
             if t_3d > 50 and f_3d > 100:
-                tag = "🏛️ 土洋同步聯手布局"
+                tag = "💼 土洋同步聯手布局"
                 accum = True
                 dump = False
             elif t_3d > 30:
-                tag = f"🏛️ 投信積極認養 (+{t_3d:+.0f}張)"
+                tag = f"💼 投信積極認養 ({t_3d:+.0f}張)"
                 accum = True
                 dump = False
             elif f_3d > 200:
-                tag = f"🏛️ 外資大舉敲進 (+{f_3d:+.0f}張)"
+                tag = f"💼 外資大舉敲進 ({f_3d:+.0f}張)"
                 accum = True
                 dump = False
             elif tot_3d < -1000 or (f_3d < -500 and t_3d < 0):
@@ -263,7 +263,7 @@ class InstitutionalManager:
                 accum = False
                 dump = True
             elif tot_3d > 50:
-                tag = f"🏛️ 法人暗中吸籌 (+{tot_3d:+.0f}張)"
+                tag = f"💼 法人暗中吸籌 ({tot_3d:+.0f}張)"
                 accum = True
                 dump = False
             else:
